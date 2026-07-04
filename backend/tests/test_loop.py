@@ -127,6 +127,20 @@ async def test_session_isolation_and_rebuild(db, monkeypatch):
     assert rebuilt.turn_count == 1
 
 
+async def test_list_sessions_title(db, monkeypatch):
+    fake = FakeLLM([[chunk(content="好的")]])
+    monkeypatch.setattr(loop_module, "llm", fake)
+
+    store = SessionStore()
+    session = await store.create()
+    empty = await store.create()
+    [e async for e in AgentLoop(session, store).run_turn("  帮我 算个题  ", [])]
+
+    rows = {r["id"]: r for r in await store.list_sessions()}
+    assert rows[session.id]["title"] == "帮我 算个题"
+    assert rows[empty.id]["title"] == "新对话"
+
+
 async def test_auto_compress_triggered(db, monkeypatch):
     monkeypatch.setattr(settings, "max_turns", 2)
     monkeypatch.setattr(settings, "compress_keep_recent", 1)

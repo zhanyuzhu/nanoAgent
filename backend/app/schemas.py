@@ -15,6 +15,7 @@ class SessionCreateResponse(BaseModel):
 
 class SessionSummary(BaseModel):
     session_id: str
+    title: str = "新对话"
     turn_count: int
     turns_since_compress: int
     created_at: str

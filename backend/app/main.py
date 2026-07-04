@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
@@ -20,6 +21,9 @@ from app.sessions.db import close_db, get_db
 from app.sessions.models import Session
 from app.sessions.store import store
 from app.tools.memory import load_memory
+
+
+logger = logging.getLogger("nanoagent")
 
 
 @asynccontextmanager
@@ -92,6 +96,7 @@ async def chat(session_id: str, request: ChatRequest):
                 async for event in agent.run_turn(request.message, request.images):
                     yield event.to_sse()
             except Exception as e:  # noqa: BLE001 - 流已开始，错误只能经 SSE 下发
+                logger.exception("chat stream failed (session=%s)", session_id)
                 yield ErrorEvent(message=f"{type(e).__name__}: {e}").to_sse()
 
     return StreamingResponse(

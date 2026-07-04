@@ -19,6 +19,17 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def _extract_title(content_json: str | None, limit: int = 40) -> str:
+    """从首条 user 消息提取会话标题；多模态消息取文本部分。"""
+    if not content_json:
+        return "新对话"
+    content = json.loads(content_json).get("content", "")
+    if isinstance(content, list):
+        content = " ".join(p.get("text", "") for p in content if p.get("type") == "text")
+    title = " ".join(str(content).split())
+    return title[:limit] if title else "新对话"
+
+
 class SessionStore:
     def __init__(self) -> None:
         self._cache: dict[str, Session] = {}
@@ -73,10 +84,17 @@ class SessionStore:
     async def list_sessions(self) -> list[dict[str, Any]]:
         db = await get_db()
         cur = await db.execute(
-            "SELECT id, turn_count, turns_since_compress, created_at, updated_at "
-            "FROM sessions ORDER BY updated_at DESC"
+            "SELECT s.id, s.turn_count, s.turns_since_compress, s.created_at, s.updated_at, "
+            "(SELECT m.content_json FROM messages m WHERE m.session_id = s.id "
+            " AND m.role = 'user' ORDER BY m.seq LIMIT 1) AS first_user "
+            "FROM sessions s ORDER BY s.updated_at DESC"
         )
-        return [dict(r) for r in await cur.fetchall()]
+        rows = []
+        for r in await cur.fetchall():
+            row = dict(r)
+            row["title"] = _extract_title(row.pop("first_user"))
+            rows.append(row)
+        return rows
 
     async def delete(self, session_id: str) -> bool:
         db = await get_db()
