@@ -13,16 +13,24 @@ function relativeTime(iso: string): string {
 interface Props {
   sessions: SessionInfo[];
   currentId: string | null;
+  streamingIds: string[];
   onSelect: (id: string) => void;
   onNew: () => void;
   onDelete: (id: string) => void;
 }
 
-export default function Sidebar({ sessions, currentId, onSelect, onNew, onDelete }: Props) {
+export default function Sidebar({
+  sessions,
+  currentId,
+  streamingIds,
+  onSelect,
+  onNew,
+  onDelete,
+}: Props) {
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">
-        <span className="brand-mark">✳</span> nanoAgent
+        <span className="brand-mark">〇</span> nanoAgent
       </div>
       <button className="new-chat-btn" onClick={onNew}>
         ＋ 新对话
@@ -34,7 +42,12 @@ export default function Sidebar({ sessions, currentId, onSelect, onNew, onDelete
             className={`session-item ${s.session_id === currentId ? "active" : ""}`}
             onClick={() => onSelect(s.session_id)}
           >
-            <div className="session-title">{s.title}</div>
+            <div className="session-title">
+              {streamingIds.includes(s.session_id) && (
+                <span className="streaming-dot" title="正在生成" />
+              )}
+              {s.title}
+            </div>
             <div className="session-meta">
               {relativeTime(s.updated_at)} · {s.turn_count} 轮
             </div>

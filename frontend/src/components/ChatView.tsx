@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 
 import { compressSession } from "../api";
+import { chatStore } from "../chatStore";
 import { useChat } from "../useChat";
 import Composer from "./Composer";
 import ReasoningBlock from "./ReasoningBlock";
@@ -13,7 +14,6 @@ interface Props {
   initialMessage: string | null;
   onInitialConsumed: () => void;
   onSendWithoutSession: (text: string) => void;
-  onTurnFinished: () => void;
 }
 
 export default function ChatView({
@@ -21,22 +21,20 @@ export default function ChatView({
   initialMessage,
   onInitialConsumed,
   onSendWithoutSession,
-  onTurnFinished,
 }: Props) {
-  const { items, streaming, loading, historyReady, send, stop, toggleBlock, addNotice } =
-    useChat(sessionId, onTurnFinished);
+  const { items, streaming, historyLoaded } = useChat(sessionId);
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
   const sentInitial = useRef(false);
 
   useEffect(() => {
-    // 等历史加载完成再自动发送，避免 reset 清掉刚入队的 user 消息
-    if (sessionId && initialMessage && historyReady && !sentInitial.current) {
+    // 等历史加载完成再自动发送，避免加载结果覆盖刚入队的 user 消息
+    if (sessionId && initialMessage && historyLoaded && !sentInitial.current) {
       sentInitial.current = true;
       onInitialConsumed();
-      void send(initialMessage);
+      void chatStore.send(sessionId, initialMessage);
     }
-  }, [sessionId, initialMessage, historyReady, onInitialConsumed, send]);
+  }, [sessionId, initialMessage, historyLoaded, onInitialConsumed]);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -54,11 +52,16 @@ export default function ChatView({
     if (!sessionId) return;
     try {
       const res = await compressSession(sessionId);
-      addNotice(res.compressed ? "较早的对话已压缩为摘要" : `未压缩：${res.reason}`);
+      chatStore.addNotice(
+        sessionId,
+        res.compressed ? "较早的对话已压缩为摘要" : `未压缩：${res.reason}`
+      );
     } catch (e) {
-      addNotice(`压缩失败：${String(e)}`);
+      chatStore.addNotice(sessionId, `压缩失败：${String(e)}`);
     }
   };
+
+  const loading = !!sessionId && !historyLoaded;
 
   return (
     <main className="chat">
@@ -77,7 +80,7 @@ export default function ChatView({
         <div className="chat-column">
           {!sessionId && (
             <div className="hero">
-              <div className="hero-mark">✳</div>
+              <div className="hero-mark">;-)</div>
               <h1>有什么可以帮你？</h1>
               <p>试试「帮我算一下 (37*89+15)/4」或「查一下项目文档」</p>
             </div>
@@ -93,10 +96,10 @@ export default function ChatView({
                 );
               case "block": {
                 const b = item.block;
+                const toggle = (id: string) => sessionId && chatStore.toggleBlock(sessionId, id);
                 if (b.type === "reasoning")
-                  return <ReasoningBlock key={b.id} block={b} onToggle={toggleBlock} />;
-                if (b.type === "tool")
-                  return <ToolBlock key={b.id} block={b} onToggle={toggleBlock} />;
+                  return <ReasoningBlock key={b.id} block={b} onToggle={toggle} />;
+                if (b.type === "tool") return <ToolBlock key={b.id} block={b} onToggle={toggle} />;
                 return <TextBlock key={b.id} block={b} />;
               }
               case "error":
@@ -128,12 +131,12 @@ export default function ChatView({
         onSend={(text) => {
           stickToBottom.current = true;
           if (sessionId) {
-            void send(text);
+            void chatStore.send(sessionId, text);
           } else {
             onSendWithoutSession(text);
           }
         }}
-        onStop={stop}
+        onStop={() => sessionId && chatStore.stop(sessionId)}
       />
     </main>
   );
